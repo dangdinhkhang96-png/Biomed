@@ -1,0 +1,21 @@
+import { useEffect, useState } from 'react';
+import { teamApi } from '@/lib/team/client';
+type Package={id:string;name:string};
+type Submission={id:string;package_id:string;step:string;submitted_on:string;recipient:string;note:string;created_at:string};
+const input='w-full rounded-lg border border-line bg-surface p-2 text-sm';
+const button='rounded-lg border border-line px-4 py-2 text-sm disabled:opacity-50';
+const day=(s:string)=>s.slice(0,10).split('-').reverse().join('/');
+export function TenderManager(){
+ const [data,setData]=useState<{packages:Package[];submissions:Submission[]}>({packages:[],submissions:[]}),[selected,setSelected]=useState(''),[q,setQ]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
+ async function load(){setData(await teamApi('tenders'));}
+ useEffect(()=>{void load().catch(e=>setError(e.message));},[]);
+ const current=data.packages.find(p=>p.id===selected),history=data.submissions.filter(s=>s.package_id===selected);
+ async function save(form:HTMLFormElement,action:string){setBusy(true);setError('');setMessage('');try{const values=Object.fromEntries(new FormData(form));const result=await teamApi<{id?:string}>(action,{...values,package_id:selected});await load();if(result.id)setSelected(result.id);form.reset();setMessage('Đã lưu. Lịch sử các lần trình trước được giữ nguyên.');}catch(e){setError(e instanceof Error?e.message:'Không lưu được.');}finally{setBusy(false);}}
+ return <section className="mx-auto w-full max-w-6xl p-4"><h2 className="text-xl font-semibold">Quản lý gói thầu</h2><p className="my-2 text-sm text-muted">Theo dõi bước đang thực hiện và lịch sử trình của từng gói. Bước hiện tại là lần cập nhật được lưu gần nhất.</p>
+ {error&&<p role="alert" className="my-3 text-bad">{error}</p>}<p role="status" className="text-sm text-teal">{message}</p>
+ <form className="my-4 flex flex-wrap items-end gap-3" onSubmit={e=>{e.preventDefault();void save(e.currentTarget,'tender-create');}}><label className="min-w-48 flex-1">Tên gói thầu<input className={input} name="name" required maxLength={300}/></label><button disabled={busy} className={button}>Tạo gói thầu</button></form>
+ <label className="block mb-4">Tìm gói thầu<input className={input} value={q} onChange={e=>setQ(e.target.value)}/></label>
+ <div className="grid gap-4 md:grid-cols-2"><div className="space-y-2">{data.packages.filter(p=>p.name.toLocaleLowerCase('vi').includes(q.toLocaleLowerCase('vi'))).map(p=>{const last=data.submissions.find(s=>s.package_id===p.id);return <button key={p.id} className={button+' block w-full text-left '+(selected===p.id?'bg-teal-soft':'bg-surface')} onClick={()=>setSelected(p.id)}><b>{p.name}</b><span className="block text-sm">{last?`${last.step} · ${day(last.submitted_on)} · Trình: ${last.recipient}`:'Chưa ghi nhận bước trình'}</span></button>;})}{!data.packages.length&&<p>Chưa có gói thầu. Nhập tên để bắt đầu.</p>}</div>
+ {current&&<div className="rounded-xl border border-line bg-surface p-4"><h3 className="font-semibold">{current.name}</h3><form className="my-4 grid gap-3" onSubmit={e=>{e.preventDefault();void save(e.currentTarget,'tender-submit');}}><label>Bước thực hiện<input className={input} name="step" required maxLength={300} placeholder="Ví dụ: Trình phê duyệt kế hoạch"/></label><label>Ngày trình<input className={input} type="date" name="submitted_on" required/></label><label>Trình ai<input className={input} name="recipient" required maxLength={200} placeholder="Họ tên / chức danh / đơn vị"/></label><label>Ghi chú<textarea className={input} name="note" maxLength={2000}/></label><button disabled={busy} className={button+' bg-teal text-surface'}>Lưu bước trình</button></form><h3 className="font-semibold">Lịch sử trình ({history.length})</h3>{!history.length&&<p className="my-2 text-muted">Chưa có lần trình nào.</p>}{history.map(s=><article key={s.id} className="border-b border-line py-3"><b>{s.step}</b><p>Ngày trình: {day(s.submitted_on)} · Trình: {s.recipient}</p>{s.note&&<p className="whitespace-pre-wrap">{s.note}</p>}<small className="text-muted">Lưu lúc {new Date(s.created_at).toLocaleString('vi-VN')}</small></article>)}</div>}
+ </div></section>;
+}
